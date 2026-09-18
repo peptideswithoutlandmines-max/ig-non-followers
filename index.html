@@ -1,1 +1,361 @@
-PLACEHOLDER_WILL_FAIL
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>@tshell7 — doesn't follow back</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+      background: #0b0b0f; color: #f2f2f2;
+    }
+    header {
+      position: sticky; top: 0; padding: 16px 16px 12px;
+      background: rgba(11,11,15,.92); backdrop-filter: blur(8px);
+      border-bottom: 1px solid #222;
+    }
+    h1 { margin: 0; font-size: 1.15rem; font-weight: 700; }
+    p { margin: 6px 0 0; color: #9a9aa3; font-size: .9rem; }
+    .toolbar { margin-top: 12px; display: grid; gap: 8px; }
+    .refresh-btn {
+      appearance: none; -webkit-appearance: none;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; min-height: 48px; padding: 12px 16px;
+      border: 0; border-radius: 12px; cursor: pointer;
+      background: #f2f2f2; color: #0b0b0f;
+      font: inherit; font-size: 1rem; font-weight: 700;
+    }
+    .refresh-btn:active { background: #d9d9e0; }
+    .refresh-btn:disabled { opacity: .65; cursor: wait; }
+    .spinner {
+      width: 16px; height: 16px; border-radius: 50%;
+      border: 2px solid rgba(11,11,15,.2); border-top-color: #0b0b0f;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status {
+      margin: 0; min-height: 1.2em; color: #9a9aa3; font-size: .85rem; line-height: 1.35;
+    }
+    .status.ok { color: #9fd7a8; }
+    .status.err { color: #f0a0a0; }
+    .status.busy { color: #c8c8d0; }
+    .webhook-row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+    .linkish {
+      appearance: none; background: none; border: 0; padding: 0;
+      color: #9a9aa3; font: inherit; font-size: .8rem; cursor: pointer;
+      text-decoration: underline; text-underline-offset: 2px;
+    }
+    .copy-btn {
+      appearance: none; border: 1px solid #3a3a4a; background: #1e1e28;
+      color: #f2f2f2; border-radius: 8px; padding: 6px 10px;
+      font: inherit; font-size: .8rem; cursor: pointer;
+    }
+    .list { padding: 8px 12px 32px; display: grid; gap: 8px; }
+    .row {
+      display: block; padding: 14px 16px; border-radius: 12px;
+      background: #16161d; color: #fff; text-decoration: none;
+      border: 1px solid #262633; font-size: 1rem;
+    }
+    .row:active { background: #1e1e28; }
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 20;
+      background: rgba(0,0,0,.6); padding: 24px 16px; box-sizing: border-box;
+      align-items: flex-end; justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      width: 100%; max-width: 480px; background: #16161d;
+      border: 1px solid #262633; border-radius: 16px; padding: 18px 16px 16px;
+      max-height: 90vh; overflow: auto;
+    }
+    .modal h2 { margin: 0 0 8px; font-size: 1.05rem; }
+    .modal p { margin: 0 0 12px; }
+    .modal input {
+      width: 100%; box-sizing: border-box; min-height: 48px;
+      padding: 12px; border-radius: 12px; border: 1px solid #3a3a4a;
+      background: #0b0b0f; color: #f2f2f2; font: inherit; font-size: 1rem;
+    }
+    .modal-error {
+      margin: 10px 0 0; color: #f0a0a0; font-size: .85rem; line-height: 1.35;
+    }
+    .modal-actions { display: grid; gap: 8px; margin-top: 12px; }
+    .modal-actions .refresh-btn { min-height: 44px; }
+    .modal-actions .secondary {
+      background: transparent; color: #f2f2f2; border: 1px solid #3a3a4a;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Doesn't follow @tshell7 back</h1>
+    <p>72 accounts · tap to open Instagram</p>
+    <div class="toolbar">
+      <button type="button" class="refresh-btn" id="refreshBtn" aria-live="polite">Refresh</button>
+      <p class="status" id="status" role="status"></p>
+      <div class="webhook-row">
+        <button type="button" class="linkish" id="changeWebhook">Change webhook</button>
+        <button type="button" class="copy-btn" id="copyPing" hidden>Copy refresh ping</button>
+      </div>
+    </div>
+  </header>
+  <div class="modal-backdrop" id="webhookModal" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="webhookTitle">
+      <h2 id="webhookTitle">Webhook URL</h2>
+      <p>Paste the <strong>Webhook URL</strong> from your CoS routine <strong>IG non-followers refresh</strong> (the https link — not the key). It stays in this browser only.</p>
+      <input id="webhookInput" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…" />
+      <p class="modal-error" id="modalError" hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="refresh-btn" id="saveWebhook">Save webhook</button>
+        <button type="button" class="refresh-btn secondary" id="clearWebhook">Clear saved URL</button>
+        <button type="button" class="linkish" id="cancelWebhook">Cancel</button>
+      </div>
+    </div>
+  </div>
+<div class="list">
+      <a class="row" href="https://instagram.com/giafromvegas" target="_blank" rel="noopener">giafromvegas</a>
+      <a class="row" href="https://instagram.com/redhawkacademyaz" target="_blank" rel="noopener">redhawkacademyaz</a>
+      <a class="row" href="https://instagram.com/mrsour__" target="_blank" rel="noopener">mrsour__</a>
+      <a class="row" href="https://instagram.com/nader_eats" target="_blank" rel="noopener">nader_eats</a>
+      <a class="row" href="https://instagram.com/mmconceptstore.hmo" target="_blank" rel="noopener">mmconceptstore.hmo</a>
+      <a class="row" href="https://instagram.com/marmol_casacomar" target="_blank" rel="noopener">marmol_casacomar</a>
+      <a class="row" href="https://instagram.com/milemm.zapateria" target="_blank" rel="noopener">milemm.zapateria</a>
+      <a class="row" href="https://instagram.com/avilaflorals" target="_blank" rel="noopener">avilaflorals</a>
+      <a class="row" href="https://instagram.com/atenea_beautys" target="_blank" rel="noopener">atenea_beautys</a>
+      <a class="row" href="https://instagram.com/drinkperfy" target="_blank" rel="noopener">drinkperfy</a>
+      <a class="row" href="https://instagram.com/ian.shewell" target="_blank" rel="noopener">ian.shewell</a>
+      <a class="row" href="https://instagram.com/tommygun145" target="_blank" rel="noopener">tommygun145</a>
+      <a class="row" href="https://instagram.com/jp3mma" target="_blank" rel="noopener">jp3mma</a>
+      <a class="row" href="https://instagram.com/miamipromoter_nate" target="_blank" rel="noopener">miamipromoter_nate</a>
+      <a class="row" href="https://instagram.com/lasimone244" target="_blank" rel="noopener">lasimone244</a>
+      <a class="row" href="https://instagram.com/darkmountain_apparel" target="_blank" rel="noopener">darkmountain_apparel</a>
+      <a class="row" href="https://instagram.com/scottsdale.watches" target="_blank" rel="noopener">scottsdale.watches</a>
+      <a class="row" href="https://instagram.com/dirtyboxing" target="_blank" rel="noopener">dirtyboxing</a>
+      <a class="row" href="https://instagram.com/nicefaawhat_13" target="_blank" rel="noopener">nicefaawhat_13</a>
+      <a class="row" href="https://instagram.com/annaa_100692" target="_blank" rel="noopener">annaa_100692</a>
+      <a class="row" href="https://instagram.com/losdosdesonora" target="_blank" rel="noopener">losdosdesonora</a>
+      <a class="row" href="https://instagram.com/winwinwinsupernatural" target="_blank" rel="noopener">winwinwinsupernatural</a>
+      <a class="row" href="https://instagram.com/desertazrentals" target="_blank" rel="noopener">desertazrentals</a>
+      <a class="row" href="https://instagram.com/powerlifting.united" target="_blank" rel="noopener">powerlifting.united</a>
+      <a class="row" href="https://instagram.com/daveramsey" target="_blank" rel="noopener">daveramsey</a>
+      <a class="row" href="https://instagram.com/theclotherie" target="_blank" rel="noopener">theclotherie</a>
+      <a class="row" href="https://instagram.com/platinummikeperry" target="_blank" rel="noopener">platinummikeperry</a>
+      <a class="row" href="https://instagram.com/sinpelosenlalengua.mx" target="_blank" rel="noopener">sinpelosenlalengua.mx</a>
+      <a class="row" href="https://instagram.com/bailyy_06" target="_blank" rel="noopener">bailyy_06</a>
+      <a class="row" href="https://instagram.com/pokertheory" target="_blank" rel="noopener">pokertheory</a>
+      <a class="row" href="https://instagram.com/jafcarniceria" target="_blank" rel="noopener">jafcarniceria</a>
+      <a class="row" href="https://instagram.com/betonclutch" target="_blank" rel="noopener">betonclutch</a>
+      <a class="row" href="https://instagram.com/overdogsbjj" target="_blank" rel="noopener">overdogsbjj</a>
+      <a class="row" href="https://instagram.com/theclubscottsdale" target="_blank" rel="noopener">theclubscottsdale</a>
+      <a class="row" href="https://instagram.com/emily.yysantos" target="_blank" rel="noopener">emily.yysantos</a>
+      <a class="row" href="https://instagram.com/sashalopez_44" target="_blank" rel="noopener">sashalopez_44</a>
+      <a class="row" href="https://instagram.com/ice_bagz" target="_blank" rel="noopener">ice_bagz</a>
+      <a class="row" href="https://instagram.com/phx_run" target="_blank" rel="noopener">phx_run</a>
+      <a class="row" href="https://instagram.com/bbyb.ri03" target="_blank" rel="noopener">bbyb.ri03</a>
+      <a class="row" href="https://instagram.com/valina_perez" target="_blank" rel="noopener">valina_perez</a>
+      <a class="row" href="https://instagram.com/burtex.studio" target="_blank" rel="noopener">burtex.studio</a>
+      <a class="row" href="https://instagram.com/rovosie" target="_blank" rel="noopener">rovosie</a>
+      <a class="row" href="https://instagram.com/50cent" target="_blank" rel="noopener">50cent</a>
+      <a class="row" href="https://instagram.com/d1amondsl" target="_blank" rel="noopener">d1amondsl</a>
+      <a class="row" href="https://instagram.com/paulsaladinomd" target="_blank" rel="noopener">paulsaladinomd</a>
+      <a class="row" href="https://instagram.com/danbilzerian" target="_blank" rel="noopener">danbilzerian</a>
+      <a class="row" href="https://instagram.com/foreverwilin" target="_blank" rel="noopener">foreverwilin</a>
+      <a class="row" href="https://instagram.com/stephthefounder" target="_blank" rel="noopener">stephthefounder</a>
+      <a class="row" href="https://instagram.com/kaeallie" target="_blank" rel="noopener">kaeallie</a>
+      <a class="row" href="https://instagram.com/thepriigame" target="_blank" rel="noopener">thepriigame</a>
+      <a class="row" href="https://instagram.com/rapnamefogie" target="_blank" rel="noopener">rapnamefogie</a>
+      <a class="row" href="https://instagram.com/muscles_and_macro" target="_blank" rel="noopener">muscles_and_macro</a>
+      <a class="row" href="https://instagram.com/driphats.mx" target="_blank" rel="noopener">driphats.mx</a>
+      <a class="row" href="https://instagram.com/luvkatiexo" target="_blank" rel="noopener">luvkatiexo</a>
+      <a class="row" href="https://instagram.com/textdante" target="_blank" rel="noopener">textdante</a>
+      <a class="row" href="https://instagram.com/alekssupernova" target="_blank" rel="noopener">alekssupernova</a>
+      <a class="row" href="https://instagram.com/onechampionship" target="_blank" rel="noopener">onechampionship</a>
+      <a class="row" href="https://instagram.com/amordidashmo" target="_blank" rel="noopener">amordidashmo</a>
+      <a class="row" href="https://instagram.com/bobbyparrish" target="_blank" rel="noopener">bobbyparrish</a>
+      <a class="row" href="https://instagram.com/designereyess" target="_blank" rel="noopener">designereyess</a>
+      <a class="row" href="https://instagram.com/cicichinea" target="_blank" rel="noopener">cicichinea</a>
+      <a class="row" href="https://instagram.com/liz.doza00" target="_blank" rel="noopener">liz.doza00</a>
+      <a class="row" href="https://instagram.com/degen_blastoise" target="_blank" rel="noopener">degen_blastoise</a>
+      <a class="row" href="https://instagram.com/impaullee" target="_blank" rel="noopener">impaullee</a>
+      <a class="row" href="https://instagram.com/edwardcollins_upleveled" target="_blank" rel="noopener">edwardcollins_upleveled</a>
+      <a class="row" href="https://instagram.com/vanessaa_garciiaa_" target="_blank" rel="noopener">vanessaa_garciiaa_</a>
+      <a class="row" href="https://instagram.com/foodtour_la" target="_blank" rel="noopener">foodtour_la</a>
+      <a class="row" href="https://instagram.com/amyysham" target="_blank" rel="noopener">amyysham</a>
+      <a class="row" href="https://instagram.com/down2mob_overland" target="_blank" rel="noopener">down2mob_overland</a>
+      <a class="row" href="https://instagram.com/aricordovva" target="_blank" rel="noopener">aricordovva</a>
+      <a class="row" href="https://instagram.com/allissaac" target="_blank" rel="noopener">allissaac</a>
+      <a class="row" href="https://instagram.com/samilio_mx" target="_blank" rel="noopener">samilio_mx</a>
+  </div>
+
+  <script>
+    (function () {
+      var STORAGE_KEY = 'igNonFollowersWebhookUrl';
+      var PAYLOAD = { source: 'ig-non-followers-page', handle: 'tshell7' };
+      var PING_TEXT = 'refresh list';
+
+      var refreshBtn = document.getElementById('refreshBtn');
+      var statusEl = document.getElementById('status');
+      var changeWebhook = document.getElementById('changeWebhook');
+      var copyPing = document.getElementById('copyPing');
+      var modal = document.getElementById('webhookModal');
+      var webhookInput = document.getElementById('webhookInput');
+      var modalError = document.getElementById('modalError');
+      var saveWebhook = document.getElementById('saveWebhook');
+      var clearWebhook = document.getElementById('clearWebhook');
+      var cancelWebhook = document.getElementById('cancelWebhook');
+      var pendingRefresh = false;
+
+      function getWebhook() {
+        try { return (localStorage.getItem(STORAGE_KEY) || '').trim(); }
+        catch (e) { return ''; }
+      }
+      function setWebhook(url) { localStorage.setItem(STORAGE_KEY, url.trim()); }
+      function removeWebhook() { localStorage.removeItem(STORAGE_KEY); }
+
+      function cleanPaste(raw) {
+        var s = (raw || '').trim();
+        if (!s) return '';
+        if ((s[0] === '"' && s[s.length-1] === '"') || (s[0] === "'" && s[s.length-1] === "'") || (s[0] === '`' && s[s.length-1] === '`')) {
+          s = s.slice(1, -1).trim();
+        }
+        var md = s.match(/\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/);
+        if (md) s = md[2].trim();
+        var lines = s.split(/\r?\n/);
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i].trim().replace(/^<|>$/g, '');
+          if (/^https?:\/\//i.test(line)) return line;
+        }
+        return s.replace(/^<|>$/g, '');
+      }
+
+      function isValidWebhook(url) {
+        try {
+          var u = new URL(url);
+          return u.protocol === 'https:' || u.protocol === 'http:';
+        } catch (e) { return false; }
+      }
+
+      function setModalError(text) {
+        if (!text) { modalError.hidden = true; modalError.textContent = ''; return; }
+        modalError.hidden = false;
+        modalError.textContent = text;
+      }
+
+      function setIdleLabel() {
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = 'Refresh';
+      }
+      function setBusy() {
+        refreshBtn.disabled = true;
+        refreshBtn.innerHTML = '<span class="spinner" aria-hidden="true"></span> Refreshing…';
+        setStatus('Refreshing…', 'busy');
+        copyPing.hidden = true;
+      }
+      function setStatus(text, kind) {
+        statusEl.textContent = text || '';
+        statusEl.className = 'status' + (kind ? ' ' + kind : '');
+      }
+      function openModal() {
+        webhookInput.value = getWebhook();
+        setModalError('');
+        modal.classList.add('open');
+        modal.setAttribute('aria-hidden', 'false');
+        setTimeout(function () { webhookInput.focus(); }, 50);
+      }
+      function closeModal(opts) {
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+        if (!opts || !opts.keepPending) pendingRefresh = false;
+      }
+      function copyText(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+        return new Promise(function (resolve, reject) {
+          var ta = document.createElement('textarea');
+          ta.value = text; ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta); ta.select();
+          try { document.execCommand('copy'); document.body.removeChild(ta); resolve(); }
+          catch (e) { document.body.removeChild(ta); reject(e); }
+        });
+      }
+      function showCorsFallback() {
+        setIdleLabel();
+        setStatus('Browser blocked the webhook call (common on GitHub Pages). Message Chief of Staff “refresh list” instead — same result.', 'err');
+        copyPing.hidden = false;
+      }
+      function sendRefresh(url) {
+        setBusy();
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(PAYLOAD)
+        }).then(function (res) {
+          if (!res.ok) {
+            setIdleLabel();
+            setStatus('Refresh request failed (' + res.status + '). Check the webhook URL, or message Chief of Staff “refresh list”.', 'err');
+            return;
+          }
+          setIdleLabel();
+          setStatus('Request sent. Jimmy is rechecking — reload this page in a few minutes.', 'ok');
+        }).catch(function () { showCorsFallback(); });
+      }
+
+      refreshBtn.addEventListener('click', function () {
+        var url = getWebhook();
+        if (!url) {
+          pendingRefresh = true;
+          setStatus('Paste the webhook URL from your CoS routine.', '');
+          openModal();
+          return;
+        }
+        sendRefresh(url);
+      });
+      changeWebhook.addEventListener('click', function () {
+        pendingRefresh = false;
+        openModal();
+      });
+      saveWebhook.addEventListener('click', function () {
+        var url = cleanPaste(webhookInput.value);
+        webhookInput.value = url;
+        if (!url) {
+          setModalError('Paste the https Webhook URL first (from the CoS routine — not the key).');
+          return;
+        }
+        if (!isValidWebhook(url)) {
+          setModalError('That is not a valid https link. Copy Webhook URL only (starts with https://).');
+          return;
+        }
+        try { setWebhook(url); }
+        catch (e) {
+          setModalError('This browser blocked saving (often Private browsing). Turn Private off, or just message Chief of Staff “refresh list”.');
+          return;
+        }
+        setModalError('');
+        closeModal({ keepPending: true });
+        setStatus('Webhook saved on this phone only.', 'ok');
+        if (pendingRefresh) {
+          pendingRefresh = false;
+          sendRefresh(url);
+        }
+      });
+      clearWebhook.addEventListener('click', function () {
+        try { removeWebhook(); } catch (e) {}
+        webhookInput.value = '';
+        setModalError('');
+        closeModal();
+        setStatus('Saved webhook cleared.', '');
+      });
+      cancelWebhook.addEventListener('click', function () { closeModal(); });
+      modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+      copyPing.addEventListener('click', function () {
+        copyText(PING_TEXT).then(function () {
+          copyPing.textContent = 'Copied';
+          setTimeout(function () { copyPing.textContent = 'Copy refresh ping'; }, 1600);
+        }).catch(function () {
+          setStatus('Could not copy. Just message Chief of Staff: refresh list', 'err');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
